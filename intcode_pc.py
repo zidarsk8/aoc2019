@@ -11,8 +11,8 @@ class Intcode:
         self.program = program
         self.ram: Dict[int, int] = dict(enumerate(int(i) for i in program.split(",")))
         self.position = 0
-        self.running = True
-        self._next_input = None
+        self.running: bool = True
+        self._next_input: Optional[int] = None
         self.outputs: List[int] = []
 
     def reset(self):
@@ -39,12 +39,13 @@ class Intcode:
 
     def read(self) -> None:  # 3
         if self._next_input is None:
-            raise Exception("Missing input value")
+            self.running = False
+            return
         self.ram[self.ram[self.position + 1]] = self._next_input
         self._next_input = None
         self.position += 2
 
-    def write(self) -> None:  # 4
+    def write(self) -> int:  # 4
         output = self.relative(1)
         self.outputs.append(output)
         self.position += 2
@@ -113,6 +114,7 @@ class Intcode:
     def run_partial(self, next_input: Optional[int] = None):
         """Run the intcode computer until the first output."""
         self._next_input = next_input
+        self.running = True
         while self.running:
             result = self.commands[self.current_code]()
             if result is not None:
@@ -139,3 +141,23 @@ class Intcode:
     @property
     def state(self) -> str:
         return ",".join(str(v) for k, v in sorted(self.ram.items()))
+
+
+class IntMainframe:
+    def __init__(self, program: str, amp_count: int = 0):
+        self.program = program
+        self.amps: List[Intcode] = []
+        self.init_amps(amp_count)
+        pass
+
+    def init_amps(self, amp_count: int):
+        for _ in range(amp_count):
+            self.amps.append(Intcode(self.program))
+        pass
+
+    def run_chain(self, phase_settings: List[int]):
+        last_output = 0
+        for amp, phase_setting in zip(self.amps, phase_settings):
+            amp.run_partial(phase_setting)
+            amp.run_partial(last_output)
+        pass
