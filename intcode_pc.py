@@ -1,5 +1,10 @@
-from typing import List, Dict, Callable, Optional
+import collections
 import itertools
+from typing import Callable
+from typing import Dict
+from typing import DefaultDict
+from typing import List
+from typing import Optional
 
 puzzle_input_2 = "1,0,0,3,1,1,2,3,1,3,4,3,1,5,0,3,2,10,1,19,1,19,9,23,1,23,13,27,1,10,27,31,2,31,13,35,1,10,35,39,2,9,39,43,2,43,9,47,1,6,47,51,1,10,51,55,2,55,13,59,1,59,10,63,2,63,13,67,2,67,9,71,1,6,71,75,2,75,9,79,1,79,5,83,2,83,13,87,1,9,87,91,1,13,91,95,1,2,95,99,1,99,6,0,99,2,14,0,0"
 
@@ -10,12 +15,15 @@ puzzle_input_5 = "3,225,1,225,6,6,1100,1,238,225,104,0,101,14,135,224,101,-69,22
 class Intcode:
     def __init__(self, program: str):
         self.program = program
-        self.ram: Dict[int, int] = dict(enumerate(int(i) for i in program.split(",")))
+        self.ram: DefaultDict[int, int] = collections.defaultdict(
+            int, dict(enumerate(int(i) for i in program.split(",")))
+        )
         self.position = 0
         self.running: bool = True
         self.finished: bool = False
         self._next_input: Optional[int] = None
-        self.outputs: List[int] = []
+        self._outputs: List[int] = []
+        self.relative_base = 0
 
     def reset(self):
         self.ram: Dict[int, int] = dict(
@@ -25,64 +33,72 @@ class Intcode:
         self.running = True
         self._next_input = None
 
-    def relative(self, relative: int, mode: int = 0) -> int:
-        if self.mode[relative - 1]:
-            return self.ram[self.position + relative]
+    def par_pos(self, parameter):
+        if self.mode[parameter - 1] == 2:
+            return self.ram[self.position + parameter] + self.relative_base
+        else:
+            return self.ram[self.position + parameter]
 
-        return self.ram[self.ram[self.position + relative]]
+    def parameter(self, parameter: int, mode: int = 0) -> int:
+        if self.mode[parameter - 1] == 1:
+            return self.ram[self.position + parameter]
+
+        return self.ram[self.par_pos(parameter)]
 
     def add(self) -> None:  # 1
-        self.ram[self.ram[self.position + 3]] = self.relative(1) + self.relative(2)
+        self.ram[self.par_pos(3)] = self.parameter(1) + self.parameter(2)
         self.position += 4
 
     def mul(self) -> None:  # 2
-        self.ram[self.ram[self.position + 3]] = self.relative(1) * self.relative(2)
+        self.ram[self.par_pos(3)] = self.parameter(1) * self.parameter(2)
         self.position += 4
 
     def read(self) -> None:  # 3
         if self._next_input is None:
             self.running = False
             return
-        self.ram[self.ram[self.position + 1]] = self._next_input
+        self.ram[self.par_pos(1)] = self._next_input
         self._next_input = None
         self.position += 2
 
     def write(self) -> int:  # 4
-        output = self.relative(1)
-        self.outputs.append(output)
+        output = self.parameter(1)
+        self._outputs.append(output)
         self.position += 2
         return output
 
     def jt(self) -> None:  # 5
-        par1 = self.relative(1)
-        par2 = self.relative(2)
+        par1 = self.parameter(1)
+        par2 = self.parameter(2)
         if par1:
             self.position = par2
         else:
             self.position += 3
 
     def jf(self) -> None:  # 6
-        par1 = self.relative(1)
-        par2 = self.relative(2)
+        par1 = self.parameter(1)
+        par2 = self.parameter(2)
         if not par1:
             self.position = par2
         else:
             self.position += 3
 
     def lt(self) -> None:  # 7
-        self.ram[self.ram[self.position + 3]] = int(self.relative(1) < self.relative(2))
+        self.ram[self.par_pos(3)] = int(self.parameter(1) < self.parameter(2))
         self.position += 4
 
     def eq(self) -> None:  # 8
-        self.ram[self.ram[self.position + 3]] = int(
-            self.relative(1) == self.relative(2)
-        )
+        self.ram[self.par_pos(3)] = int(self.parameter(1) == self.parameter(2))
         self.position += 4
+
+    def set_relative_base(self) -> None:  # 9
+        self.relative_base += self.parameter(1)
+        self.position += 2
 
     def stop(self) -> int:  # 99
         self.running = False
         self.finished = True
-        return self.outputs[-1] if self.outputs else self.ram[0]
+        return self._outputs[-1] if self._outputs else self.ram[0]
 
     @property
     def commands(self) -> Dict[int, Callable[[], Optional[int]]]:
@@ -95,6 +111,7 @@ class Intcode:
             6: self.jf,
             7: self.lt,
             8: self.eq,
+            9: self.set_relative_base,
             99: self.stop,
         }
 
@@ -144,6 +161,14 @@ class Intcode:
     @property
     def state(self) -> str:
         return ",".join(str(v) for k, v in sorted(self.ram.items()))
+
+    @property
+    def outputs(self) -> str:
+        return ",".join(str(i) for i in self._outputs)
+
+    def print_stack(self):
+        for i in range(min(self.ram), max(self.ram) + 1):
+            print(f"{i:>10}: {self.ram[i]:>10}")
 
 
 class IntMainframe:
