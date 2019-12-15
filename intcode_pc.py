@@ -45,9 +45,10 @@ class Intcode:
         self.position += 2
 
     def write(self) -> None:  # 4
-        output = self.ram[self.ram[self.position + 1]]
+        output = self.relative(1)
         self.outputs.append(output)
         self.position += 2
+        return output
 
     def jt(self) -> None:  # 5
         par1 = self.relative(1)
@@ -109,12 +110,19 @@ class Intcode:
             self.pos % 100000 // 10000,
         ]
 
-    def run(self, next_input: Optional[int] = None):
+    def run_partial(self, next_input: Optional[int] = None):
+        """Run the intcode computer until the first output."""
         self._next_input = next_input
         while self.running:
             result = self.commands[self.current_code]()
             if result is not None:
-                return result
+                return result, self.running
+
+    def run(self, next_input: Optional[int] = None):
+        """Run the intcode computer until it finishes and return the last output."""
+        while self.running:
+            result, _ = self.run_partial(next_input)
+        return result
 
     def set_program_state(self, program_state: int):
         self.ram[1] = program_state // 100
