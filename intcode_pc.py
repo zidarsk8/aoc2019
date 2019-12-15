@@ -1,4 +1,5 @@
 from typing import List, Dict, Callable, Optional
+import itertools
 
 puzzle_input_2 = "1,0,0,3,1,1,2,3,1,3,4,3,1,5,0,3,2,10,1,19,1,19,9,23,1,23,13,27,1,10,27,31,2,31,13,35,1,10,35,39,2,9,39,43,2,43,9,47,1,6,47,51,1,10,51,55,2,55,13,59,1,59,10,63,2,63,13,67,2,67,9,71,1,6,71,75,2,75,9,79,1,79,5,83,2,83,13,87,1,9,87,91,1,13,91,95,1,2,95,99,1,99,6,0,99,2,14,0,0"
 
@@ -12,6 +13,7 @@ class Intcode:
         self.ram: Dict[int, int] = dict(enumerate(int(i) for i in program.split(",")))
         self.position = 0
         self.running: bool = True
+        self.finished: bool = False
         self._next_input: Optional[int] = None
         self.outputs: List[int] = []
 
@@ -79,6 +81,7 @@ class Intcode:
 
     def stop(self) -> int:  # 99
         self.running = False
+        self.finished = True
         return self.outputs[-1] if self.outputs else self.ram[0]
 
     @property
@@ -144,20 +147,57 @@ class Intcode:
 
 
 class IntMainframe:
-    def __init__(self, program: str, amp_count: int = 0):
+    def __init__(self, program: str, amp_count: int):
         self.program = program
         self.amps: List[Intcode] = []
         self.init_amps(amp_count)
-        pass
 
-    def init_amps(self, amp_count: int):
-        for _ in range(amp_count):
-            self.amps.append(Intcode(self.program))
-        pass
+    def reset(self):
+        self.init_amps(len(self.amps))
 
-    def run_chain(self, phase_settings: List[int]):
+    def init_amps(self, amp_count: int) -> None:
+        self.amps = [Intcode(self.program) for _ in range(amp_count)]
+
+    def run_chain(self, phase_settings):
         last_output = 0
         for amp, phase_setting in zip(self.amps, phase_settings):
             amp.run_partial(phase_setting)
-            amp.run_partial(last_output)
-        pass
+            last_output, _ = amp.run_partial(last_output)
+        return last_output
+
+    def get_max_sequence(self, phase_settings):
+
+        max_phase_setting: List[int] = []
+        max_result: int = 0
+        for phase_setting in itertools.permutations(phase_settings):
+            self.reset()
+            result = self.run_chain(phase_setting)
+            if result > max_result:
+                max_result = result
+                max_phase_setting = phase_setting
+
+        return max_result, list(max_phase_setting)
+
+    def run_loop(self, phase_settings):
+        last_output = 0
+
+        for amp, phase_setting in zip(self.amps, phase_settings):
+            amp.run_partial(phase_setting)
+            last_output, _ = amp.run_partial(last_output)
+        while not self.amps[-1].finished:
+            for amp, phase_setting in zip(self.amps, phase_settings):
+                last_output, _ = amp.run_partial(last_output)
+        return last_output
+
+    def get_max_loop(self, phase_settings):
+
+        max_phase_setting: List[int] = []
+        max_result: int = 0
+        for phase_setting in itertools.permutations(phase_settings):
+            self.reset()
+            result = self.run_loop(phase_setting)
+            if result > max_result:
+                max_result = result
+                max_phase_setting = phase_setting
+
+        return max_result, list(max_phase_setting)
