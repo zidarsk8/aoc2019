@@ -119,5 +119,7 @@ def test_bigger():
     intcode = Intcode(program)
     assert intcode.run(27000503537) == 1001
 
+
 def test_day5_part_2():
-    pass
+    intcode = Intcode(puzzle_input)
+    assert intcode.run(5) == 9571668
