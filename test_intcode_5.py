@@ -25,60 +25,49 @@ def test_instruction_mode():
 
 def test_day5_part_1():
     intcode = Intcode(puzzle_input)
-    intcode.next_input = 1
-    assert intcode.run() == 6731945
+    assert intcode.run(1) == 6731945
 
 
 def test_positional_equal():
     program = "3,9,8,9,10,9,4,9,99,-1,8"
     intcode = Intcode(program)
-    intcode.next_input = 7
-    assert intcode.run() == 0
+    assert intcode.run(7) == 0
 
     intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 1
+    assert intcode.run(8) == 1
 
 
 def test_position_less():
     program = "3,9,7,9,10,9,4,9,99,-1,8"
     intcode = Intcode(program)
-    intcode.next_input = 11
-    assert intcode.run() == 0
+    assert intcode.run(11) == 0
 
     intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 0
+    assert intcode.run(8) == 0
 
     intcode = Intcode(program)
-    intcode.next_input = 5
-    assert intcode.run() == 1
+    assert intcode.run(5) == 1
 
 
 def test_immediate_equal():
     program = "3,3,1108,-1,8,3,4,3,99"
     intcode = Intcode(program)
-    intcode.next_input = 7
-    assert intcode.run() == 0
+    assert intcode.run(7) == 0
 
     intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 1
+    assert intcode.run(8) == 1
 
 
 def test_immediate_less():
     program = "3,3,1107,-1,8,3,4,3,99"
     intcode = Intcode(program)
-    intcode.next_input = 11
-    assert intcode.run() == 0
+    assert intcode.run(11) == 0
 
     intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 0
+    assert intcode.run(8) == 0
 
     intcode = Intcode(program)
-    intcode.next_input = 5
-    assert intcode.run() == 1
+    assert intcode.run(5) == 1
 
 
 def test_day5_part_2():

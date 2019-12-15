@@ -12,7 +12,7 @@ class Intcode:
         self.ram: Dict[int, int] = dict(enumerate(int(i) for i in program.split(",")))
         self.position = 0
         self.running = True
-        self.next_input = None
+        self._next_input = None
         self.outputs: List[int] = []
 
     def reset(self):
@@ -21,7 +21,7 @@ class Intcode:
         )
         self.position = 0
         self.running = True
-        self.next_input = None
+        self._next_input = None
 
     def relative(self, relative: int, mode: int = 0) -> int:
         if self.mode[relative - 1]:
@@ -38,14 +38,15 @@ class Intcode:
         self.position += 4
 
     def read(self) -> None:  # 3
-        if self.next_input is None:
+        if self._next_input is None:
             raise Exception("Missing input value")
-        self.ram[self.ram[self.position + 1]] = self.next_input
-        self.next_input = None
+        self.ram[self.ram[self.position + 1]] = self._next_input
+        self._next_input = None
         self.position += 2
 
     def write(self) -> None:  # 4
-        self.outputs.append(self.ram[self.ram[self.position + 1]])
+        output = self.ram[self.ram[self.position + 1]]
+        self.outputs.append(output)
         self.position += 2
 
     def jt(self) -> None:  # 5
@@ -108,7 +109,8 @@ class Intcode:
             self.pos % 100000 // 10000,
         ]
 
-    def run(self):
+    def run(self, next_input: Optional[int] = None):
+        self._next_input = next_input
         while self.running:
             result = self.commands[self.current_code]()
             if result is not None:
@@ -129,152 +131,3 @@ class Intcode:
     @property
     def state(self) -> str:
         return ",".join(str(v) for k, v in sorted(self.ram.items()))
-
-
-### aoc 5
-
-
-def test_mode():
-    intcode = Intcode("2")
-    assert intcode.mode == [0, 0, 0]
-    intcode = Intcode("102")
-    assert intcode.mode == [1, 0, 0]
-    intcode = Intcode("101")
-    assert intcode.mode == [1, 0, 0]
-    intcode = Intcode("1002")
-    assert intcode.mode == [0, 1, 0]
-    intcode = Intcode("1102")
-    assert intcode.mode == [1, 1, 0]
-
-
-def test_instruction_mode():
-    program = "1002,4,3,4,33"
-    intcode = Intcode(program)
-    intcode.run()
-    assert intcode.state == "1002,4,3,4,99"
-
-
-def test_day5_part_1():
-    intcode = Intcode(puzzle_input_5)
-    intcode.next_input = 1
-    assert intcode.run() == 6731945
-
-
-def test_positional_equal():
-    program = "3,9,8,9,10,9,4,9,99,-1,8"
-    intcode = Intcode(program)
-    intcode.next_input = 7
-    assert intcode.run() == 0
-
-    intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 1
-
-
-def test_position_less():
-    program = "3,9,7,9,10,9,4,9,99,-1,8"
-    intcode = Intcode(program)
-    intcode.next_input = 11
-    assert intcode.run() == 0
-
-    intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 0
-
-    intcode = Intcode(program)
-    intcode.next_input = 5
-    assert intcode.run() == 1
-
-
-def test_immediate_equal():
-    program = "3,3,1108,-1,8,3,4,3,99"
-    intcode = Intcode(program)
-    intcode.next_input = 7
-    assert intcode.run() == 0
-
-    intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 1
-
-
-def test_immediate_less():
-    program = "3,3,1107,-1,8,3,4,3,99"
-    intcode = Intcode(program)
-    intcode.next_input = 11
-    assert intcode.run() == 0
-
-    intcode = Intcode(program)
-    intcode.next_input = 8
-    assert intcode.run() == 0
-
-    intcode = Intcode(program)
-    intcode.next_input = 5
-    assert intcode.run() == 1
-
-
-def test_day5_part_2():
-    pass
-
-
-### aoc 2
-
-
-def test_pos():
-    program = "1,23,4501"
-    intcode = Intcode(program)
-    intcode.position = 2
-    assert intcode.pos == 4501
-    assert intcode.current_code == 1
-
-
-def test_state():
-    program = "1,2,3,4,5"
-    intcode = Intcode(program)
-    intcode.ram[1] = 55
-    intcode.ram[4] = 0
-    assert intcode.state == "1,55,3,4,0"
-
-
-def test_intcode_init():
-    program = "1,9,10,3,2,3,11,0,99,30,40,50"
-    intcode = Intcode(program)
-    assert intcode.position == 0
-    assert intcode.ram
-    assert intcode.run
-
-
-def test_empty_run():
-    intcode = Intcode("99")
-    assert intcode.running
-    intcode.run()
-    assert not intcode.running
-
-
-def test_add():
-    intcode = Intcode("1,4,4,0,99")
-    intcode.run()
-    assert intcode.state == "198,4,4,0,99"
-
-
-def test_mul():
-    intcode = Intcode("2,4,4,0,99")
-    intcode.run()
-    assert intcode.state == "9801,4,4,0,99"
-
-
-def test_first_program():
-    program = "1,9,10,3,2,3,11,0,99,30,40,50"
-    intcode = Intcode(program)
-    intcode.run()
-    assert intcode.state == "3500,9,10,70,2,3,11,0,99,30,40,50"
-
-
-def test_part_1():
-    intcode = Intcode(puzzle_input_2)
-    intcode.set_program_state(1202)
-    assert intcode.run() == 3085697
-
-
-def test_part_2():
-    intcode = Intcode(puzzle_input_2)
-    assert intcode.get_program_state(19690720) == 9425
