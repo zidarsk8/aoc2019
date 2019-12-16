@@ -1,3 +1,4 @@
+from typing import DefaultDict, Tuple, Set
 import collections
 from .intcode_pc import Intcode
 
@@ -6,14 +7,16 @@ class Robot:
     direction_marker = {0: "^", 1: ">", 2: "v", 3: "<"}
     directions = {0: (0, 1), 1: (1, 0), 2: (0, -1), 3: (-1, 0)}
 
-    def __init__(self, robot_brain):
-        self.panel = collections.defaultdict(lambda: ".")
+    def __init__(self, robot_brain: str):
+        self.panel: DefaultDict[Tuple[int, int], str] = collections.defaultdict(
+            lambda: "."
+        )
         self.panel[(0, 0)] = "."
-        self.robot_brain = robot_brain
-        self.position = (0, 0)
-        self.direction = 0  # 0 up 1 right 2 down 3 left
-        self.brain = Intcode(robot_brain)
-        self.painted = {(0, 0)}
+        self.robot_brain: str = robot_brain
+        self.position: Tuple[int, int] = (0, 0)
+        self.direction: int = 0  # 0 up 1 right 2 down 3 left
+        self.brain: Intcode = Intcode(robot_brain)
+        self.painted: Set[Tuple[int, int]] = {(0, 0)}
 
     def single_step(self):
         paint, running = self.brain.run_partial(int(self.panel[self.position] == "#"))
