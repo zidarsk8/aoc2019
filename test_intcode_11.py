@@ -112,4 +112,4 @@ def test_example_panint():
 def test_part_1():
     robot = Robot(robot_brain)
     robot.run_robot()
-    assert len(robot.painted) == 6
+    assert len(robot.painted) == 2041
