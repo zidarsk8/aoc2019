@@ -11,10 +11,13 @@ DOT = frozenset(".")
 
 
 class Path:
-    def __init__(self, position: Point, keys: FrozenSet, steps: int = 0):
+    def __init__(
+        self, position: Point, keys: FrozenSet, steps: int = 0, finished: bool = False
+    ):
         self.steps = steps
         self.position: Point = position
         self.keys: FrozenSet[str] = keys
+        self.finished = finished
 
     def __key(self):
         return (self.position, self.keys)
@@ -27,12 +30,15 @@ class Path:
             return self.__key() == other.__key()
         return NotImplemented
 
-    def branch(self, new_pos, keys, data):
-        if new_pos in keys:
+    def branch(self, new_pos, all_keys, data):
+        if self.finished:
+            return None
+        if new_pos in all_keys:
             new_keys = self.keys.union({data[new_pos]})
         else:
             new_keys = self.keys
-        return Path(new_pos, new_keys, self.steps + 1)
+        finished = len(new_keys) == len(all_keys) + 1
+        return Path(new_pos, new_keys, self.steps + 1, finished=finished)
 
 
 class Maze:
@@ -51,7 +57,7 @@ class Maze:
         self.width: int = 0
         self.height: int = 0
         self.current: List[Path] = []
-        self.visited = set()
+        self.visited = {}
         self.read_data()
 
     def read_data(self):
@@ -75,7 +81,7 @@ class Maze:
 
         start_point = Path(self.start, DOT)
 
-        self.visited.add(start_point)
+        self.visited[start_point] = start_point.steps
         self.current.append(start_point)
 
     def _count_walls(self, x, y):
@@ -110,12 +116,12 @@ class Maze:
         visited_pos = {v.position for v in self.visited}
 
         def ch(x, y):
-            for i, path in enumerate(self.current):
+            for i, path in enumerate(self.current[::-1]):
                 if path.position == (x, y):
                     return str(i % 10)
             if (x, y) == self.start:
                 return "@"
-            if (x, y) in visited_pos:  # and self.data[(x, y)] == ".":
+            if (x, y) in visited_pos and self.data[(x, y)] == ".":
                 return "_"
 
             return self.data[(x, y)]
@@ -144,24 +150,41 @@ class Maze:
                 continue
 
             new_path = path.branch(new_pos, self.keys, self.data)
-            if new_path not in self.visited:
+            if new_path:
+                if new_path in self.visited:
+                    if self.visited[new_path] > new_path.steps:
+                        new_points.append(new_path)
+                else:
+                    new_points.append(new_path)
+
+            if new_path and new_path.finished:
                 new_points.append(new_path)
 
         return new_points
 
     def tick(self):
+        self.print()
         if self.current:
             self.ticks += 1
-            self.current = sum([self.move(point) for point in self.current], [])
-            self.visited = self.visited.union(set(self.current))
+            pos = self.current.pop()
+            moves = self.move(pos)
+            for new_pos in moves:
+                self.current.append(new_pos)
+            for move in moves:
+                self.visited[move] = min(move.steps, self.visited.get(move, 1000000000))
 
     def keys_collected(self):
         # +1 is for the "." to make walking easier in path.keys
         return any(len(path.keys) == len(self.keys) + 1 for path in self.current)
 
     def walk(self):
-        while self.current and not self.keys_collected():
+        while self.current:
             self.tick()
+
+    def steps(self):
+        for p in self.visited:
+            print(p.steps, p.position, p.keys, p.finished)
+        return min(path.steps for path in self.visited if path.finished)
 
 
 def test_read_data():
@@ -219,7 +242,7 @@ def test_tick():
     assert (
         maze.get_grid()
         == """#########
-              #b.A0@1a#
+              #b.A1@0a#
               #########""".replace(
             " ", ""
         )
@@ -230,11 +253,11 @@ def test_double_tick():
     maze = Maze(1)
     maze.tick()
     maze.tick()
-    assert len(maze.current) == 1
+    assert len(maze.current) == 2
     assert (
         maze.get_grid()
         == """#########
-              #b.A_@_0#
+              #b.A1@_0#
               #########""".replace(
             " ", ""
         )
@@ -243,7 +266,7 @@ def test_double_tick():
     assert (
         maze.get_grid()
         == """#########
-              #b.A_@0_#
+              #b.A1@0_#
               #########""".replace(
             " ", ""
         )
@@ -254,7 +277,7 @@ def test_double_tick():
     assert (
         maze.get_grid()
         == """#########
-              #b.0_@__#
+              #b.01@__#
               #########""".replace(
             " ", ""
         )
@@ -265,7 +288,7 @@ def test_double_tick():
 def test_walk_1():
     maze = Maze(1)
     maze.walk()
-    assert maze.ticks == 8
+    assert maze.steps() == 8
 
 
 def test_walk_4():
@@ -277,26 +300,28 @@ def test_walk_4():
     maze.print()
 
 
-@pytest.mark.parametrize("maze, ticks", [(2, 86), (3, 132), (5, 81),])
-def test_walks(maze, ticks):
+@pytest.mark.parametrize("maze, steps", [(2, 86), (3, 132), (5, 81),])
+def test_walks(maze, steps):
     if maze > 3:
         return
     maze = Maze(maze)
     maze.walk()
-    assert maze.ticks == ticks
+    assert maze.steps() == steps
 
 
-def test_part_1():
-    maze = Maze(0)
-    maze.print()
-    for i in range(100):
-        maze.close_dead_ends()
-
-    maze.expand_walls()
-
-    maze.print()
-    for _ in range(6):
-        print(len(maze.current))
-        maze.tick()
-    maze.print()
-    assert maze.ticks == 0
+#
+#
+# def test_part_1():
+#     maze = Maze(0)
+#     maze.print()
+#     for i in range(100):
+#         maze.close_dead_ends()
+#
+#     maze.expand_walls()
+#
+#     maze.print()
+#     for _ in range(6):
+#         print(len(maze.current))
+#         maze.tick()
+#     maze.print()
+#     assert maze.ticks == 0
