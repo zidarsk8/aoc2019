@@ -77,9 +77,9 @@ class Maze:
         self.read_data()
         self.close_dead_ends()
         self.thickness = self.get_maze_thickness()
-        self.portals = self.all_portals()
-        self.portal_map = {
-            p: k for k, positions in self.portals.items() for p in positions
+        self.portals: Dict[str, Tuple[int, int]] = self.all_portals()
+        self.portal_map: Dict[Tuple[int, int], str] = {
+            v: k for k, v in self.portals.items()
         }
 
     def get_maze_thickness(self):
@@ -141,20 +141,8 @@ class Maze:
         print()
 
     def _add_graph_vertices(self, g):
-        for i in range(self.width):
-            if self.data[(i, 0)] in string.ascii_uppercase:
-                g.add_vertex(self.data[(i, 0)] + self.data[(i, 1)])
-            if self.data[(i, self.height - 1)] in string.ascii_uppercase:
-                g.add_vertex(
-                    self.data[(i, self.height - 1)] + self.data[(i, self.height)]
-                )
-        for i in range(self.height):
-            if self.data[(0, i)] in string.ascii_uppercase:
-                g.add_vertex(self.data[(0, i)] + self.data[(1, i)])
-            if self.data[(self.width - 1, i)] in string.ascii_uppercase:
-                g.add_vertex(
-                    self.data[(self.width - 1, i)] + self.data[(self.width, i)]
-                )
+        for portal, pos in self.portals.items():
+            g.add_vertex(portal, pos)
         return g
 
     def _get_possible_steps(self, position):
@@ -179,7 +167,7 @@ class Maze:
             steps += 1
             for pos in self.current:
                 if pos in self.portal_map:
-                    visited_portals[self.portal_map[pos]] = steps
+                    visited_portals[self.portal_map[pos]] = (steps, pos)
             # print(steps)
             # self.print()
         self.visited = set()
@@ -187,12 +175,17 @@ class Maze:
         return visited_portals
 
     def _add_graph_edges(self, g):
-        for portal, positions in self.portals.items():
-            for position in positions:
-                visited_portals = self._walk_from_portal(position)
-                for visited_portal, distance in visited_portals.items():
-                    g.add_edge(portal, visited_portal, cost=distance)
+        for portal, position in self.portals.items():
+            visited_portals = self._walk_from_portal(position)
+            for visited_portal, dist_pos in visited_portals.items():
+                distance, _ = dist_pos
+                g.add_edge(portal, visited_portal, cost=distance)
 
+        for portal in self.portals:
+            base = portal[:2]
+            p1, p2 = f"{base}o", f"{base}i"
+            if p1 in self.portals and p2 in self.portals:
+                g.add_edge(f"{base}o", f"{base}i", 1)
         return g
 
     def to_graph(self):
@@ -211,10 +204,12 @@ class Maze:
         return self._find_dot_around(x1, y1) or self._find_dot_around(x2, y2)
 
     def _get_portal_name(self, x1, y1, x2, y2):
-        return self.data[(x1, y1)] + self.data[(x2, y2)]
+        chars = self.data[(x1, y1)] + self.data[(x2, y2)]
+        rim = "i" if 3 < x1 < self.width - 3 and 3 < y1 < self.height - 3 else "o"
+        return chars + rim
 
     def all_portals(self):
-        portals = collections.defaultdict(set)
+        portals = {}
         for x in range(self.width):
             for y in range(self.height):
                 if (
@@ -224,30 +219,18 @@ class Maze:
                     portal_name = self._get_portal_name(x, y, x + 1, y)
                     portal_position = self._get_portal_position(x, y, x + 1, y)
 
-                    portals[portal_name].add(portal_position)
+                    portals[portal_name] = portal_position
                 if (
                     self.data[(x, y)] in string.ascii_uppercase
                     and self.data[(x, y + 1)] in string.ascii_uppercase
                 ):
                     portal_name = self._get_portal_name(x, y, x, y + 1)
                     portal_position = self._get_portal_position(x, y, x, y + 1)
-                    portals[portal_name].add(portal_position)
+                    portals[portal_name] = portal_position
         return portals
 
-    def walk2(self, frm, to):
-        g = Graph()
-        start_pos = self.portals["AA"].pop()
-        frm = g.add_vertex("AA", start_pos, dl=0)
-        frm.distance = 0
-        unvisited: List[Vertex] = list(g.vert_dict.values())
-        heapq.heapify(unvisited)
-
-        while unvisited:
-            closest: Vertex = heapq.heappop(unvisited)
-            possible_neighbors = self._walk_from_portal(closest.pos)
-            print(possible_neighbors)
-
-            heapq.heapify(unvisited)
+    def _dl(self, pos):
+        return -1 if min(pos) < 3 or max(pos) > self.width - 3 else 1
 
 
 def dikstra(g: Graph, frm, to):
@@ -262,40 +245,32 @@ def dikstra(g: Graph, frm, to):
     while unvisited:
         closest: Vertex = heapq.heappop(unvisited)
         for neighbor, distance in closest.adjacent.items():
-            alt = closest.distance + distance + 1
+            alt = closest.distance + distance
             if neighbor.distance > alt:
                 neighbor.distance = alt
                 neighbor.previous = closest
         heapq.heapify(unvisited)
 
-    to.distance -= 1
-
 
 def test_dikstra_1():
     maze = Maze(1)
     g = maze.to_graph()
-    dikstra(g, "AA", "ZZ")
-    assert g.get_vertex("ZZ").distance == 23
+    dikstra(g, "AAo", "ZZo")
+    assert g.get_vertex("ZZo").distance == 23
 
 
 def test_dikstra_2():
     maze = Maze(2)
     g = maze.to_graph()
-    dikstra(g, "AA", "ZZ")
-    assert g.get_vertex("ZZ").distance == 58
+    dikstra(g, "AAo", "ZZo")
+    assert g.get_vertex("ZZo").distance == 58
 
 
-# def test_dikstra():
-#     maze = Maze(0)
-#     g = maze.to_graph()
-#     dikstra(g, "AA", "ZZ")
-#     assert g.get_vertex("ZZ").distance == 578
-
-
-def test_levels():
-    maze = Maze(3)
-    maze.walk2("AA", "ZZ")
-    assert g.get_vertex("ZZ").distance == 578
+def test_dikstra():
+    maze = Maze(0)
+    g = maze.to_graph()
+    dikstra(g, "AAo", "ZZo")
+    assert g.get_vertex("ZZo").distance == 578
 
 
 def test_graph():
@@ -345,20 +320,28 @@ def test_maze_to_graph_2():
     maze.print()
     g = maze.to_graph()
     assert set(g.vert_dict.keys()) == {
-        "AA",
-        "AS",
-        "BU",
-        "BU",
-        "CP",
-        "DI",
-        "JO",
-        "JP",
-        "LF",
-        "QG",
-        "VT",
-        "VT",
-        "YN",
-        "ZZ",
+        "AAo",
+        "ASo",
+        "ASi",
+        "BUo",
+        "BUi",
+        "CPo",
+        "CPi",
+        "DIo",
+        "DIi",
+        "JOo",
+        "JOi",
+        "JPo",
+        "JPi",
+        "LFo",
+        "LFi",
+        "QGo",
+        "QGi",
+        "VTo",
+        "VTi",
+        "YNo",
+        "YNi",
+        "ZZo",
     }
     print(maze.portals)
     assert set(maze.portals) == set(g.vert_dict.keys())
@@ -368,19 +351,19 @@ def test_graph_edges():
     maze = Maze(1)
     maze.print()
     g = maze.to_graph()
-    assert "ZZ" in {v.id for v in g.vert_dict["AA"].adjacent}
-    assert g.vert_dict["AA"].adjacent[g.get_vertex("ZZ")] == 26
-    assert g.vert_dict["ZZ"].adjacent[g.get_vertex("AA")] == 26
+    assert "ZZo" in {v.id for v in g.vert_dict["AAo"].adjacent}
+    assert g.vert_dict["AAo"].adjacent[g.get_vertex("ZZo")] == 26
+    assert g.vert_dict["ZZo"].adjacent[g.get_vertex("AAo")] == 26
 
-    assert g.vert_dict["AA"].adjacent[g.get_vertex("BC")] == 4
-    assert g.vert_dict["BC"].adjacent[g.get_vertex("AA")] == 4
+    assert g.vert_dict["AAo"].adjacent[g.get_vertex("BCi")] == 4
+    assert g.vert_dict["BCi"].adjacent[g.get_vertex("AAo")] == 4
 
-    assert g.vert_dict["BC"].adjacent[g.get_vertex("DE")] == 6
-    assert g.vert_dict["DE"].adjacent[g.get_vertex("BC")] == 6
+    assert g.vert_dict["BCo"].adjacent[g.get_vertex("DEi")] == 6
+    assert g.vert_dict["DEi"].adjacent[g.get_vertex("BCo")] == 6
 
-    assert g.vert_dict["FG"].adjacent[g.get_vertex("DE")] == 4
+    assert g.vert_dict["FGo"].adjacent[g.get_vertex("DEo")] == 4
 
-    assert g.vert_dict["FG"].adjacent[g.get_vertex("ZZ")] == 6
+    assert g.vert_dict["FGi"].adjacent[g.get_vertex("ZZo")] == 6
 
 
 def test_maze_to_graph():
