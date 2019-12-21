@@ -4,16 +4,19 @@ import heapq
 
 
 class Vertex:
-    def __init__(self, node, pos=None, dl=0):
+    def __init__(self, name, pos=None, dl=0):
         self.pos = pos
-        self.id = node
+        self.name = name
         self.adjacent = {}
         self.distance = 100000000
         self.previous = None
         self.dl = dl
 
     def __str__(self):
-        return f"{self.id} {self.previous and self.previous.id} {self.distance} adjacent: {[x.id for x in self.adjacent]}"
+        return (
+            f"{self.name} {self.previous and self.previous.name} "
+            f"{self.distance} adjacent: {[x.name for x in self.adjacent]}"
+        )
 
     def add_neighbor(self, neighbor, weight=0):
         self.adjacent[neighbor] = weight
@@ -21,14 +24,11 @@ class Vertex:
     def get_connections(self):
         return self.adjacent.keys()
 
-    def get_id(self):
-        return self.id
-
     def get_weight(self, neighbor):
         return self.adjacent[neighbor]
 
     def get_adjacent_repr(self):
-        return {k.id: v for k, v in self.adjacent.items()}
+        return {k.name: v for k, v in self.adjacent.items()}
 
     def __gt__(self, other):
         return self.distance > other.distance
@@ -42,10 +42,10 @@ class Graph:
     def __iter__(self):
         return iter(self.vert_dict.values())
 
-    def add_vertex(self, node, pos=None, dl=0):
+    def add_vertex(self, name, pos=None, dl=0):
         self.num_vertices = self.num_vertices + 1
-        new_vertex = Vertex(node, pos, dl)
-        self.vert_dict[node] = new_vertex
+        new_vertex = Vertex(name, pos, dl)
+        self.vert_dict[name] = new_vertex
         return new_vertex
 
     def get_vertex(self, vertex_id: str) -> Vertex:
@@ -233,6 +233,78 @@ class Maze:
         return -1 if min(pos) < 3 or max(pos) > self.width - 3 else 1
 
 
+def _is_wall(vert, current_level):
+    if vert.name[:2] in ("AA", "ZZ"):
+        return current_level != 0
+    elif vert.name[2] == "o":
+        return current_level == 0
+    return False
+
+
+def _add_level_neighbors(data, g, current):
+    for vert, cost in data.vert_dict[current.name[:3]].adjacent.items():
+
+        neighbor_level = int(current.name[3:])
+        if vert.name[:2] == current.name[:2]:
+            if vert.name[2] == "o":
+                neighbor_level += 1
+            else:
+                neighbor_level -= 1
+
+        if _is_wall(vert, neighbor_level):
+            continue
+
+        neighbor_name = f"{vert.name}{neighbor_level}"
+
+        neighbor: Vertext = g.vert_dict.get(neighbor_name)
+        if neighbor:
+            if neighbor.distance > current.distance + cost:
+                neighbor.distance = current.distance + cost
+                neighbor.previous = current
+        else:
+            g.add_edge(current.name, neighbor_name, cost)
+            new_vertex = g.vert_dict[neighbor_name]
+            new_vertex.distance = current.distance + cost
+            new_vertex.previous = current
+            yield new_vertex
+
+
+def dikstra_walk(data, to):
+    g = Graph()
+    start_vertex = g.add_vertex("AAo0")
+    start_vertex.distance = 0
+    unvisited: List[Vertex] = [start_vertex]
+    heapq.heapify(unvisited)
+
+    i = 0
+    while to not in g.vert_dict:
+        current: Vertex = heapq.heappop(unvisited)
+        new_neighbors = _add_level_neighbors(data, g, current)
+        for n in new_neighbors:
+            heapq.heappush(unvisited, n)
+        i += 1
+        if i > 600000:
+            break
+
+    return g
+
+
+def test_maze3_levels():
+    maze = Maze(3)
+    to = "ZZo0"
+    data = maze.to_graph()
+    g = dikstra_walk(data, to)
+    assert g.vert_dict.get(to).distance == 396
+
+
+def test_part2():
+    maze = Maze(0)
+    to = "ZZo0"
+    data = maze.to_graph()
+    g = dikstra_walk(data, to)
+    assert g.vert_dict.get(to).distance == 6592
+
+
 def dikstra(g: Graph, frm, to):
     print("Dikstra")
     distances = 1000000000000
@@ -266,11 +338,11 @@ def test_dikstra_2():
     assert g.get_vertex("ZZo").distance == 58
 
 
-def test_dikstra():
-    maze = Maze(0)
-    g = maze.to_graph()
-    dikstra(g, "AAo", "ZZo")
-    assert g.get_vertex("ZZo").distance == 578
+# def test_dikstra():
+#     maze = Maze(0)
+#     g = maze.to_graph()
+#     dikstra(g, "AAo", "ZZo")
+#     assert g.get_vertex("ZZo").distance == 578
 
 
 def test_graph():
@@ -295,12 +367,12 @@ def test_graph():
 
     for v in g:
         for w in v.get_connections():
-            vid = v.get_id()
-            wid = w.get_id()
+            vid = v.name
+            wid = w.name
             print("( %s , %s, %3d)" % (vid, wid, v.get_weight(w)))
 
     for v in g:
-        print("g.vert_dict[%s]=%s" % (v.get_id(), g.vert_dict[v.get_id()]))
+        print("g.vert_dict[%s]=%s" % (v.name, g.vert_dict[v.name]))
     assert g.vert_dict["a"].get_adjacent_repr() == {"b": 7, "c": 9, "f": 14}
 
 
@@ -351,7 +423,7 @@ def test_graph_edges():
     maze = Maze(1)
     maze.print()
     g = maze.to_graph()
-    assert "ZZo" in {v.id for v in g.vert_dict["AAo"].adjacent}
+    assert "ZZo" in {v.name for v in g.vert_dict["AAo"].adjacent}
     assert g.vert_dict["AAo"].adjacent[g.get_vertex("ZZo")] == 26
     assert g.vert_dict["ZZo"].adjacent[g.get_vertex("AAo")] == 26
 
@@ -376,8 +448,3 @@ def test_maze_to_graph():
     maze = Maze(2)
     g = maze.to_graph()
     assert set(maze.portals) == set(g.vert_dict.keys())
-
-
-def test_read_data():
-    maze = Maze(1)
-    maze.print()
