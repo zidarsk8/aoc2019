@@ -18,3 +18,4 @@ for i in range(f, t + 1):
 
 print(count_part1)
 print(count_part2)
+print("done")
